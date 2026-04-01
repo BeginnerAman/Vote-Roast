@@ -2,599 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Roast & Guess — Party Game</title>
-  <!-- TailwindCSS + Font Awesome + GSAP -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Vote & Roast + Guess Who</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-  <style>
-    /* custom glass morphism & smooth transitions */
-    body {
-      background: radial-gradient(circle at 10% 30%, #0a0f1e, #03050b);
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    }
-    .glass-card {
-      background: rgba(20, 25, 40, 0.75);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 2rem;
-      box-shadow: 0 25px 40px -12px rgba(0,0,0,0.5);
-    }
-    .neon-glow {
-      transition: all 0.2s ease;
-    }
-    .neon-glow:hover {
-      box-shadow: 0 0 12px rgba(249, 115, 22, 0.6);
-    }
-    .roast-text {
-      background: linear-gradient(135deg, #f97316, #dc2626);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      font-weight: 800;
-    }
-    .animate-bounce-light {
-      animation: bounceSoft 0.5s ease;
-    }
-    @keyframes bounceSoft {
-      0%,100%{ transform: translateY(0); }
-      50%{ transform: translateY(-6px); }
-    }
-    .vote-btn, .guess-option {
-      transition: transform 0.15s, background 0.2s;
-    }
-    .vote-btn:active, .guess-option:active {
-      transform: scale(0.96);
-    }
-    /* scrollbar hide but functional */
-    ::-webkit-scrollbar {
-      width: 4px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #1e293b;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #f97316;
-      border-radius: 8px;
-    }
-  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
-<body class="text-white font-sans antialiased">
+<body class="bg-gradient-to-br from-gray-900 via-purple-900 to-black text-white min-h-screen font-[Poppins] flex flex-col items-center justify-center p-4 overflow-hidden">
 
-  <!-- MAIN APP WRAPPER -->
-  <div id="app" class="min-h-screen flex flex-col items-center justify-center p-4 md:p-6">
-    <!-- dynamic screen injected here -->
-    <div id="screenContainer" class="w-full max-w-5xl mx-auto"></div>
+  <div id="emoji-container" class="pointer-events-none fixed inset-0 z-0"></div>
+
+  <div id="game-container" class="relative z-10 w-full max-w-md bg-white/10 backdrop-blur-lg rounded-3xl p-6 shadow-2xl border border-white/20">
+    
+    <div id="screen-login" class="screen block">
+      <h1 class="text-4xl font-extrabold text-center mb-2 bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-yellow-500">Vote & Roast</h1>
+      <p class="text-center text-gray-300 mb-8 text-sm">The ultimate group exposure game 👀</p>
+      
+      <div class="space-y-4">
+        <input type="text" id="playerName" placeholder="Your Name" class="w-full bg-black/30 border border-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:border-pink-500 transition">
+        <input type="text" id="roomCode" placeholder="Room Code (e.g. 1234)" class="w-full bg-black/30 border border-gray-600 rounded-xl px-4 py-3 uppercase focus:outline-none focus:border-pink-500 transition">
+        <button id="btn-join" class="w-full bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 font-bold py-3 rounded-xl transition transform hover:scale-105 shadow-lg">Join / Create Room</button>
+      </div>
+    </div>
+
+    <div id="screen-lobby" class="screen hidden text-center">
+      <h2 class="text-2xl font-bold mb-2">Room: <span id="display-room-code" class="text-pink-400"></span></h2>
+      <p class="mb-4 text-sm text-gray-300">Waiting for victims... (<span id="player-count">0</span>/6)</p>
+      <ul id="player-list" class="space-y-2 mb-6 max-h-48 overflow-y-auto"></ul>
+      <button id="btn-start" class="hidden w-full bg-green-500 hover:bg-green-600 font-bold py-3 rounded-xl transition shadow-lg">Start Game (Host)</button>
+    </div>
+
+    <div id="screen-vote" class="screen hidden text-center">
+      <span class="text-xs font-bold uppercase tracking-widest text-pink-400">Round 1</span>
+      <h2 id="vote-question" class="text-2xl font-bold mt-2 mb-6">Sabse lazy kaun hai?</h2>
+      <div id="vote-buttons" class="space-y-3"></div>
+      <p id="vote-status" class="mt-4 text-sm text-gray-400 hidden">Waiting for others to vote...</p>
+    </div>
+
+    <div id="screen-roast" class="screen hidden text-center">
+      <h2 class="text-3xl font-bold mb-2 text-red-400">Target Acquired 🎯</h2>
+      <p class="text-xl mb-4">You guys voted <span id="roast-victim" class="font-bold text-yellow-400 text-2xl"></span></p>
+      <div class="bg-black/40 p-4 rounded-xl border border-red-500/30">
+        <p id="roast-text" class="italic text-lg text-gray-200">"Their bed must be charging rent at this point."</p>
+      </div>
+    </div>
+
+    <div id="screen-submit" class="screen hidden text-center">
+      <span class="text-xs font-bold uppercase tracking-widest text-blue-400">Round 2: Guess Who</span>
+      <h2 class="text-xl font-bold mt-2 mb-4">Spill some tea ☕</h2>
+      <p class="text-sm text-gray-300 mb-4">Write an anonymous funny confession or message about anyone here.</p>
+      <textarea id="anonymous-msg" rows="3" class="w-full bg-black/30 border border-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition mb-4" placeholder="Be savage, but keep it friendly..."></textarea>
+      <button id="btn-submit-msg" class="w-full bg-blue-500 hover:bg-blue-600 font-bold py-3 rounded-xl transition shadow-lg">Send Anonymously</button>
+    </div>
+
+    <div id="screen-guess" class="screen hidden text-center">
+      <h2 class="text-xl font-bold mb-4">Who wrote this? 🤔</h2>
+      <div class="bg-white/10 p-4 rounded-xl mb-6 shadow-inner">
+        <p id="current-guess-msg" class="text-lg font-semibold text-yellow-300">"..."</p>
+      </div>
+      <div id="guess-buttons" class="grid grid-cols-2 gap-3"></div>
+      <p id="guess-status" class="mt-4 text-sm text-gray-400 hidden">Waiting for others...</p>
+    </div>
+
+    <div id="screen-leaderboard" class="screen hidden text-center">
+      <h2 class="text-3xl font-bold mb-6 text-yellow-400">Final Scores 🏆</h2>
+      <ul id="leaderboard-list" class="space-y-3 mb-6"></ul>
+      <button id="btn-replay" class="hidden w-full bg-gradient-to-r from-pink-500 to-yellow-500 font-bold py-3 rounded-xl transition shadow-lg text-black">Play Again (Host)</button>
+    </div>
+
   </div>
 
-  <!-- Firebase SDK -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, onValue, set, update, push, remove, onDisconnect, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-    // Firebase Config (provided)
-    const firebaseConfig = {
-      apiKey: "AIzaSyBvk4riEC5qhNFNMA9O_rx-S1kAwrHzvbw",
-      authDomain: "voteroast-57ecf.firebaseapp.com",
-      projectId: "voteroast-57ecf",
-      storageBucket: "voteroast-57ecf.firebasestorage.app",
-      messagingSenderId: "654433059396",
-      appId: "1:654433059396:web:8105dfa734d040ec4df211",
-      databaseURL: "https://voteroast-57ecf-default-rtdb.firebaseio.com"
-    };
-    
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    
-    // ---------- GLOBAL STATE ----------
-    let currentRoomId = null;
-    let currentPlayerId = null;
-    let currentNickname = null;
-    let unsubscribeRoom = null;
-    
-    // Helper: generate short room code
-    const generateRoomCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
-    
-    // Roast messages bank
-    const roastMessages = [
-      "🍗 *SLOW ROASTED* 🍗: {name} itni lazy hai ki sofa ne inko adopt kar liya! 😂🔥",
-      "⚡ *ELECTRIC ROAST*: {name} ki energy level dead snake se bhi neeche 🐍💀",
-      "🤡 *CLOWN AWARD*: {name} ka dimaag vacation pe hai! 🤯🤣",
-      "🐢 *TURTLE POWER*: {name} se race mein tortoise bhi jeet jaaye! 🏆😭",
-      "📉 *LOW EFFORT KING*: {name} ne aaj breathing ke alawa kuch nahi kiya 🤌💨",
-      "🔥 *BURN NOTICE*: {name} ki wattage zero — bulb bhi roshni nahi de sakta 💡😆"
-    ];
-    
-    const funnyQuestions = [
-      "🤔 sabse lazy kaun hai?",
-      "😈 sabse jyada bakwas kaun karta hai?",
-      "😂 most likely to snore in class?",
-      "💀 kon sabse zyada overacting karta hai?",
-      "🍕 sabse bada khau kaun hai?",
-      "📸 selfie addict kaun hai?"
-    ];
-    
-    // Helper: update UI screen
-    function renderScreen(component) {
-      const container = document.getElementById("screenContainer");
-      if (container) container.innerHTML = component;
-      // GSAP micro entrance
-      gsap.fromTo(".glass-card", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.05 });
-    }
-    
-    // ---------- JOIN / CREATE SCREEN ----------
-    function showJoinScreen() {
-      renderScreen(`
-        <div class="glass-card p-8 md:p-12 w-full max-w-md mx-auto text-center">
-          <div class="mb-6">
-            <i class="fas fa-fire text-5xl text-orange-500 mb-2"></i>
-            <h1 class="text-4xl font-black bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">ROAST & GUESS</h1>
-            <p class="text-gray-300 mt-2">Party game · 2–6 players</p>
-          </div>
-          <div class="space-y-4">
-            <input type="text" id="nicknameInput" placeholder="Your funky name" maxlength="16" class="w-full p-3 rounded-xl bg-gray-800/80 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
-            <input type="text" id="roomCodeInput" placeholder="Room code (optional)" class="w-full p-3 rounded-xl bg-gray-800/80 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
-            <div class="flex gap-3 flex-wrap justify-center">
-              <button id="createRoomBtn" class="bg-orange-600 hover:bg-orange-500 px-6 py-3 rounded-full font-bold transition-all shadow-lg flex-1"><i class="fas fa-plus-circle"></i> Create Room</button>
-              <button id="joinRoomBtn" class="bg-gray-700 hover:bg-gray-600 px-6 py-3 rounded-full font-bold transition-all flex-1"><i class="fas fa-sign-in-alt"></i> Join</button>
-            </div>
-          </div>
-          <p class="text-xs text-gray-400 mt-6">🔥 No login · Real-time chaos</p>
-        </div>
-      `);
-      
-      document.getElementById("createRoomBtn")?.addEventListener("click", async () => {
-        let nickname = document.getElementById("nicknameInput").value.trim();
-        if (!nickname) nickname = "Roster_" + Math.floor(Math.random() * 999);
-        const roomCode = generateRoomCode();
-        await createNewRoom(roomCode, nickname);
-      });
-      
-      document.getElementById("joinRoomBtn")?.addEventListener("click", async () => {
-        let nickname = document.getElementById("nicknameInput").value.trim();
-        if (!nickname) nickname = "Guest_" + Math.floor(Math.random() * 999);
-        let roomCode = document.getElementById("roomCodeInput").value.trim().toUpperCase();
-        if (!roomCode) return alert("Enter room code!");
-        await joinExistingRoom(roomCode, nickname);
-      });
-    }
-    
-    // create room
-    async function createNewRoom(roomCode, nickname) {
-      const roomRef = ref(db, `rooms/${roomCode}`);
-      const snapshot = await get(roomRef);
-      if (snapshot.exists()) return createNewRoom(generateRoomCode(), nickname); // collision
-      const playerId = generatePlayerId();
-      const initialData = {
-        gameState: "waiting",
-        players: {
-          [playerId]: {
-            nickname: nickname,
-            score: 0,
-            joinedAt: Date.now()
-          }
-        },
-        round1: { votes: {}, roastedPlayerId: null, question: null },
-        round2: { messages: {}, guesses: {}, submittedMessages: false },
-        createdAt: Date.now()
-      };
-      await set(roomRef, initialData);
-      // set disconnect cleanup
-      const playerRef = ref(db, `rooms/${roomCode}/players/${playerId}`);
-      onDisconnect(playerRef).remove();
-      currentRoomId = roomCode;
-      currentPlayerId = playerId;
-      currentNickname = nickname;
-      sessionStorage.setItem("roastPlayerId", playerId);
-      sessionStorage.setItem("roastRoomId", roomCode);
-      attachRoomListener(roomCode);
-    }
-    
-    async function joinExistingRoom(roomCode, nickname) {
-      const roomRef = ref(db, `rooms/${roomCode}`);
-      const snapshot = await get(roomRef);
-      if (!snapshot.exists()) return alert("Room not found! Create a new one.");
-      const roomData = snapshot.val();
-      const playerCount = roomData.players ? Object.keys(roomData.players).length : 0;
-      if (playerCount >= 6) return alert("Room is full (max 6 players) 😢");
-      if (roomData.gameState !== "waiting") return alert("Game already in progress, please wait for replay or new room.");
-      const playerId = generatePlayerId();
-      const updates = {};
-      updates[`rooms/${roomCode}/players/${playerId}`] = {
-        nickname: nickname,
-        score: 0,
-        joinedAt: Date.now()
-      };
-      await update(ref(db), updates);
-      const playerRef = ref(db, `rooms/${roomCode}/players/${playerId}`);
-      onDisconnect(playerRef).remove();
-      currentRoomId = roomCode;
-      currentPlayerId = playerId;
-      currentNickname = nickname;
-      sessionStorage.setItem("roastPlayerId", playerId);
-      sessionStorage.setItem("roastRoomId", roomCode);
-      attachRoomListener(roomCode);
-    }
-    
-    function generatePlayerId() {
-      return "p_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
-    }
-    
-    // ---------- MAIN ROOM LISTENER (real-time UI) ----------
-    function attachRoomListener(roomId) {
-      if (unsubscribeRoom) unsubscribeRoom();
-      const roomRef = ref(db, `rooms/${roomId}`);
-      unsubscribeRoom = onValue(roomRef, (snapshot) => {
-        const data = snapshot.val();
-        if (!data) {
-          alert("Room deleted or expired. Return to lobby.");
-          showJoinScreen();
-          return;
-        }
-        renderGameUI(data);
-        checkAutoStart(data);
-      });
-    }
-    
-    // Auto start lobby -> game
-    function checkAutoStart(data) {
-      if (!currentRoomId) return;
-      if (data.gameState === "waiting") {
-        const playersCount = data.players ? Object.keys(data.players).length : 0;
-        if (playersCount >= 2 && playersCount <= 6) {
-          // start the game
-          startGameSequence();
-        }
-      }
-    }
-    
-    async function startGameSequence() {
-      const randomQuestion = funnyQuestions[Math.floor(Math.random() * funnyQuestions.length)];
-      const updates = {};
-      updates[`rooms/${currentRoomId}/gameState`] = "round1_vote";
-      updates[`rooms/${currentRoomId}/round1`] = {
-        votes: {},
-        roastedPlayerId: null,
-        question: randomQuestion
-      };
-      updates[`rooms/${currentRoomId}/round2`] = { messages: {}, guesses: {}, submittedMessages: false };
-      await update(ref(db), updates);
-    }
-    
-    // main UI render based on state
-    function renderGameUI(data) {
-      const players = data.players || {};
-      const playersList = Object.values(players);
-      const currentPlayerData = players[currentPlayerId] || { nickname: "?", score: 0 };
-      const gameState = data.gameState;
-      const roomCode = currentRoomId;
-      
-      // common header
-      const headerHtml = `
-        <div class="flex flex-wrap justify-between items-center gap-3 mb-4 bg-gray-900/50 p-3 rounded-2xl backdrop-blur-sm">
-          <div class="flex items-center gap-2"><i class="fas fa-hashtag text-orange-400"></i><span class="font-mono font-bold">${roomCode}</span></div>
-          <div class="flex items-center gap-2"><i class="fas fa-users"></i><span>${Object.keys(players).length}/6</span></div>
-          <div class="flex items-center gap-2"><i class="fas fa-star text-yellow-400"></i><span class="font-bold">${currentPlayerData.score} pts</span></div>
-        </div>
-      `;
-      
-      // Lobby screen
-      if (gameState === "waiting") {
-        const playerItems = Object.values(players).map(p => `<div class="bg-gray-800/70 rounded-full px-4 py-2 text-sm"><i class="fas fa-user-circle mr-2"></i>${p.nickname}</div>`).join('');
-        renderScreen(`
-          <div class="glass-card p-6 md:p-8 w-full max-w-2xl">
-            ${headerHtml}
-            <div class="text-center my-6">
-              <i class="fas fa-hourglass-half text-5xl text-orange-300 animate-pulse"></i>
-              <h2 class="text-2xl font-bold mt-3">Waiting for players...</h2>
-              <p class="text-gray-300">need at least 2 players to start 🔥</p>
-            </div>
-            <div class="flex flex-wrap gap-3 justify-center mt-4">${playerItems}</div>
-            <button id="forceStartBtn" class="mt-6 bg-orange-700/50 hover:bg-orange-600 px-5 py-2 rounded-full text-sm">⚡ Force start (if 2+ players)</button>
-            <button id="leaveRoomBtn" class="mt-3 bg-red-800/40 hover:bg-red-700 px-5 py-2 rounded-full text-sm w-full">Leave room</button>
-          </div>
-        `);
-        document.getElementById("forceStartBtn")?.addEventListener("click", () => startGameSequence());
-        document.getElementById("leaveRoomBtn")?.addEventListener("click", leaveRoom);
-        return;
-      }
-      
-      // ROUND 1: VOTE
-      if (gameState === "round1_vote") {
-        const question = data.round1?.question || "sabse lazy kaun hai?";
-        const votesData = data.round1?.votes || {};
-        const alreadyVoted = votesData[currentPlayerId] !== undefined;
-        const otherPlayers = Object.entries(players).filter(([id]) => id !== currentPlayerId);
-        
-        let voteButtons = '';
-        if (!alreadyVoted) {
-          voteButtons = otherPlayers.map(([id, p]) => `
-            <button data-vote-id="${id}" class="vote-btn bg-gray-800 hover:bg-orange-600 w-full p-3 rounded-xl flex items-center gap-3 transition">
-              <i class="fas fa-user-astronaut text-xl"></i><span class="flex-1 text-left">${p.nickname}</span><i class="fas fa-vote-yea opacity-70"></i>
-            </button>
-          `).join('');
-        } else {
-          voteButtons = `<div class="text-center p-4 bg-green-900/30 rounded-xl">✅ You voted! Waiting for others...</div>`;
-        }
-        
-        const progress = `${Object.keys(votesData).length}/${Object.keys(players).length} voted`;
-        renderScreen(`
-          <div class="glass-card p-6 md:p-8 w-full max-w-2xl">
-            ${headerHtml}
-            <div class="text-center mb-4"><span class="text-3xl">🗳️</span><h2 class="text-2xl font-bold">Round 1: Vote & Roast</h2><p class="text-orange-300 italic">${question}</p></div>
-            <div class="mb-3 text-sm text-gray-400">${progress}</div>
-            <div class="grid gap-3 max-h-96 overflow-y-auto">${voteButtons}</div>
-            ${!alreadyVoted ? '' : '<div class="mt-4 text-center text-gray-400"><i class="fas fa-spinner fa-pulse"></i> waiting for roast...</div>'}
-            <button id="leaveGameBtn" class="mt-6 bg-red-800/50 w-full py-2 rounded-full text-sm">🚪 Exit game</button>
-          </div>
-        `);
-        if (!alreadyVoted) {
-          document.querySelectorAll("[data-vote-id]").forEach(btn => {
-            btn.addEventListener("click", async (e) => {
-              const targetId = btn.getAttribute("data-vote-id");
-              const voteRef = ref(db, `rooms/${currentRoomId}/round1/votes/${currentPlayerId}`);
-              await set(voteRef, targetId);
-              gsap.to(btn, { scale: 0.95, duration: 0.1, yoyo: true, repeat: 1 });
-            });
-          });
-        }
-        document.getElementById("leaveGameBtn")?.addEventListener("click", leaveRoom);
-        return;
-      }
-      
-      // round1_result (roast reveal)
-      if (gameState === "round1_result") {
-        const roastedId = data.round1?.roastedPlayerId;
-        const roastedPlayer = roastedId && players[roastedId] ? players[roastedId].nickname : "someone";
-        const randomRoast = roastMessages[Math.floor(Math.random() * roastMessages.length)].replace("{name}", roastedPlayer);
-        renderScreen(`
-          <div class="glass-card p-6 md:p-8 w-full max-w-2xl text-center">
-            ${headerHtml}
-            <div class="my-4"><i class="fas fa-fire text-6xl text-orange-500"></i></div>
-            <div class="bg-black/40 p-5 rounded-2xl border-l-8 border-orange-500">
-              <p class="text-xl font-black roast-text">🔥 ROAST ALERT 🔥</p>
-              <p class="text-lg mt-2">${randomRoast}</p>
-            </div>
-            <p class="mt-4 text-gray-300">✨ +2 points for voting (everyone gets participation points)</p>
-            <button id="nextRoundBtn" class="mt-6 bg-orange-600 hover:bg-orange-500 px-8 py-3 rounded-full font-bold shadow-xl transition-all">Next Round ➡️ Guess Who</button>
-          </div>
-        `);
-        // add participation points for all players after showing roast (once)
-        addParticipationPoints();
-        document.getElementById("nextRoundBtn")?.addEventListener("click", async () => {
-          await update(ref(db), { [`rooms/${currentRoomId}/gameState`]: "round2_submit" });
-        });
-        return;
-      }
-      
-      // ROUND 2: SUBMIT ANONYMOUS MESSAGES
-      if (gameState === "round2_submit") {
-        const round2 = data.round2 || { messages: {}, guesses: {} };
-        const alreadySubmitted = round2.messages && Object.keys(round2.messages).some(mid => round2.messages[mid].authorId === currentPlayerId);
-        let submitArea = '';
-        if (!alreadySubmitted) {
-          submitArea = `
-            <textarea id="anonMsg" rows="2" class="w-full p-3 bg-gray-800 rounded-xl border border-gray-600" placeholder="Write something funny / roast / secret... (anonymous)"></textarea>
-            <button id="submitMsgBtn" class="mt-3 bg-purple-600 hover:bg-purple-500 w-full py-2 rounded-full font-bold">📨 Submit anonymous message</button>
-          `;
-        } else {
-          submitArea = `<div class="text-center p-4 bg-green-800/30 rounded-xl"><i class="fas fa-check-circle"></i> Message sent! Waiting for others...</div>`;
-        }
-        const msgCount = round2.messages ? Object.keys(round2.messages).length : 0;
-        const totalPlayers = Object.keys(players).length;
-        renderScreen(`
-          <div class="glass-card p-6 md:p-8 w-full max-w-2xl">
-            ${headerHtml}
-            <h2 class="text-2xl font-bold text-center">✍️ Round 2: Anonymous Messages</h2>
-            <p class="text-center text-gray-300 mb-4">Everyone submits a spicy anonymous message 🔥</p>
-            <div class="bg-gray-800/50 p-3 rounded-xl text-center text-sm">📬 Messages submitted: ${msgCount}/${totalPlayers}</div>
-            <div class="mt-5">${submitArea}</div>
-            <button id="leaveGameBtn2" class="mt-6 bg-red-800/50 w-full py-2 rounded-full text-sm">Leave game</button>
-          </div>
-        `);
-        if (!alreadySubmitted) {
-          document.getElementById("submitMsgBtn")?.addEventListener("click", async () => {
-            const text = document.getElementById("anonMsg").value.trim();
-            if (!text) return alert("Write something funny!");
-            const messageId = "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-            const messageRef = ref(db, `rooms/${currentRoomId}/round2/messages/${messageId}`);
-            await set(messageRef, { authorId: currentPlayerId, text: text });
-            gsap.to("#submitMsgBtn", { scale: 1.05, duration: 0.2, yoyo: true });
-          });
-        }
-        document.getElementById("leaveGameBtn2")?.addEventListener("click", leaveRoom);
-        
-        // auto-advance when all submitted
-        if (msgCount === totalPlayers && totalPlayers > 0 && !alreadySubmitted) {
-          setTimeout(async () => {
-            const stateSnap = await get(ref(db, `rooms/${currentRoomId}/gameState`));
-            if (stateSnap.val() === "round2_submit") {
-              await update(ref(db), { [`rooms/${currentRoomId}/gameState`]: "round2_guess" });
-            }
-          }, 1200);
-        }
-        return;
-      }
-      
-      // ROUND 2: GUESS WHO (anonymous messages revealed)
-      if (gameState === "round2_guess") {
-        const messages = data.round2?.messages || {};
-        const messagesList = Object.values(messages);
-        const guessesData = data.round2?.guesses || {};
-        const hasPlayerGuessed = guessesData[currentPlayerId] !== undefined;
-        const totalPlayersCount = Object.keys(players).length;
-        
-        if (!hasPlayerGuessed && messagesList.length) {
-          // build guess form: each message with dropdown
-          let guessFormHtml = `<div class="space-y-6 max-h-[60vh] overflow-y-auto pr-2">`;
-          messagesList.forEach((msg, idx) => {
-            const options = Object.values(players).map(p => `<option value="${p.nickname}">${p.nickname}</option>`).join('');
-            guessFormHtml += `
-              <div class="bg-gray-800/70 p-4 rounded-xl">
-                <p class="italic text-yellow-200">“${escapeHtml(msg.text)}”</p>
-                <select id="guessSelect_${idx}" data-mid="${Object.keys(messages)[idx]}" data-authorid="${msg.authorId}" class="mt-2 w-full p-2 bg-gray-700 rounded-lg text-white">
-                  <option value="">Who wrote this?</option>
-                  ${options}
-                </select>
-              </div>
-            `;
-          });
-          guessFormHtml += `<button id="submitGuessesBtn" class="mt-4 bg-green-600 hover:bg-green-500 w-full py-3 rounded-full font-bold text-lg">🔍 Submit guesses (+10 pts each correct)</button></div>`;
-          renderScreen(`
-            <div class="glass-card p-6 md:p-8 w-full max-w-3xl">
-              ${headerHtml}
-              <h2 class="text-2xl font-bold text-center">🕵️ Guess Who Wrote It</h2>
-              <p class="text-center text-orange-300 mb-3">Match each anonymous message to the player!</p>
-              ${guessFormHtml}
-              <button id="leaveGuessBtn" class="mt-4 bg-red-800/50 w-full py-2 rounded-full text-sm">Leave Game</button>
-            </div>
-          `);
-          document.getElementById("submitGuessesBtn")?.addEventListener("click", async () => {
-            const selects = document.querySelectorAll("[id^='guessSelect_']");
-            const guessMap = {};
-            for (let sel of selects) {
-              const messageKey = sel.getAttribute("data-mid");
-              const selectedNick = sel.value;
-              if (!selectedNick) return alert("Please guess for all messages!");
-              // find player id by nickname
-              const playerEntry = Object.entries(players).find(([id, p]) => p.nickname === selectedNick);
-              if (!playerEntry) return;
-              guessMap[messageKey] = playerEntry[0];
-            }
-            // store guesses
-            await set(ref(db, `rooms/${currentRoomId}/round2/guesses/${currentPlayerId}`), guessMap);
-            gsap.to("#submitGuessesBtn", { scale: 1.05, duration: 0.2, yoyo: true });
-          });
-          document.getElementById("leaveGuessBtn")?.addEventListener("click", leaveRoom);
-        } else {
-          // waiting or final scores display (after everyone guessed)
-          const allPlayersIds = Object.keys(players);
-          const guessesCount = Object.keys(guessesData).length;
-          const allGuessed = guessesCount === totalPlayersCount && totalPlayersCount > 0;
-          if (allGuessed && messagesList.length > 0) {
-            // compute scores final
-            computeAndEndGame(players, messages, guessesData);
-          } else {
-            renderScreen(`
-              <div class="glass-card p-8 text-center max-w-xl">
-                ${headerHtml}
-                <i class="fas fa-hourglass-half text-5xl text-orange-400 animate-pulse"></i>
-                <h2 class="text-2xl mt-4">Waiting for all players to guess...</h2>
-                <p>Guessed: ${guessesCount}/${totalPlayersCount}</p>
-                <button id="leaveWaitBtn" class="mt-6 bg-red-800/50 px-5 py-2 rounded-full">Leave</button>
-              </div>
-            `);
-            document.getElementById("leaveWaitBtn")?.addEventListener("click", leaveRoom);
-          }
-        }
-        return;
-      }
-      
-      // GAME OVER + SCOREBOARD + REPLAY
-      if (gameState === "game_over") {
-        const finalPlayers = Object.values(players).sort((a,b)=>b.score - a.score);
-        const winner = finalPlayers[0];
-        const replayHtml = `
-          <div class="glass-card p-6 md:p-8 w-full max-w-2xl text-center">
-            ${headerHtml}
-            <i class="fas fa-trophy text-6xl text-yellow-400 mb-2"></i>
-            <h2 class="text-3xl font-black">Game Over!</h2>
-            <div class="bg-black/30 rounded-2xl p-4 my-4">
-              <p class="text-xl">🏆 WINNER: ${winner?.nickname} with ${winner?.score} points 🏆</p>
-            </div>
-            <div class="grid gap-2 my-4 max-h-60 overflow-y-auto">
-              ${finalPlayers.map(p => `<div class="flex justify-between bg-gray-800/60 p-2 rounded-lg"><span>${p.nickname}</span><span class="font-mono">${p.score} pts</span></div>`).join('')}
-            </div>
-            <button id="replayBtn" class="bg-orange-500 hover:bg-orange-400 px-8 py-3 rounded-full font-bold text-xl mt-2"><i class="fas fa-undo-alt"></i> REPLAY 🔁</button>
-            <button id="exitAfterGameBtn" class="mt-3 bg-gray-700 w-full py-2 rounded-full">Exit to Lobby</button>
-          </div>
-        `;
-        renderScreen(replayHtml);
-        document.getElementById("replayBtn")?.addEventListener("click", resetGameForReplay);
-        document.getElementById("exitAfterGameBtn")?.addEventListener("click", leaveRoom);
-        return;
-      }
-      
-      renderScreen(`<div class="glass-card p-8">Loading game state...</div>`);
-    }
-    
-    async function addParticipationPoints() {
-      const playersSnap = await get(ref(db, `rooms/${currentRoomId}/players`));
-      const players = playersSnap.val();
-      if (!players) return;
-      const updates = {};
-      for (let pid in players) {
-        const oldScore = players[pid].score || 0;
-        updates[`rooms/${currentRoomId}/players/${pid}/score`] = oldScore + 2;
-      }
-      await update(ref(db), updates);
-    }
-    
-    async function computeAndEndGame(players, messages, guessesData) {
-      // scoring: each correct guess = +10 points
-      const messagesList = Object.entries(messages);
-      const playerScores = {};
-      for (let pid in players) playerScores[pid] = players[pid].score || 0;
-      
-      for (let [guesserId, guessMapping] of Object.entries(guessesData)) {
-        let correctCount = 0;
-        for (let [msgId, guessedPlayerId] of Object.entries(guessMapping)) {
-          const originalAuthor = messages[msgId]?.authorId;
-          if (originalAuthor && guessedPlayerId === originalAuthor) correctCount++;
-        }
-        const pointsEarned = correctCount * 10;
-        playerScores[guesserId] = (playerScores[guesserId] || 0) + pointsEarned;
-      }
-      // write back scores
-      const scoreUpdates = {};
-      for (let [pid, newScore] of Object.entries(playerScores)) {
-        scoreUpdates[`rooms/${currentRoomId}/players/${pid}/score`] = newScore;
-      }
-      scoreUpdates[`rooms/${currentRoomId}/gameState`] = "game_over";
-      await update(ref(db), scoreUpdates);
-    }
-    
-    async function resetGameForReplay() {
-      const roomRef = ref(db, `rooms/${currentRoomId}`);
-      const snap = await get(roomRef);
-      const data = snap.val();
-      if (!data) return;
-      const playersReset = {};
-      for (let [pid, p] of Object.entries(data.players)) {
-        playersReset[pid] = { nickname: p.nickname, score: 0, joinedAt: Date.now() };
-      }
-      const resetData = {
-        gameState: "waiting",
-        players: playersReset,
-        round1: { votes: {}, roastedPlayerId: null, question: null },
-        round2: { messages: {}, guesses: {}, submittedMessages: false },
-      };
-      await update(ref(db, `rooms/${currentRoomId}`), resetData);
-    }
-    
-    async function leaveRoom() {
-      if (currentRoomId && currentPlayerId) {
-        await remove(ref(db, `rooms/${currentRoomId}/players/${currentPlayerId}`));
-      }
-      if (unsubscribeRoom) unsubscribeRoom();
-      currentRoomId = null;
-      currentPlayerId = null;
-      showJoinScreen();
-    }
-    
-    function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
-    
-    // initial
-    const storedId = sessionStorage.getItem("roastPlayerId");
-    const storedRoom = sessionStorage.getItem("roastRoomId");
-    if (storedId && storedRoom) {
-      currentPlayerId = storedId;
-      currentRoomId = storedRoom;
-      attachRoomListener(storedRoom);
-    } else {
-      showJoinScreen();
-    }
-  </script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
