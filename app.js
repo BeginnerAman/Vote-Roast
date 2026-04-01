@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
-// 1. FIREBASE CONFIGURATION
 const firebaseConfig = {
     apiKey: "AIzaSyBvk4riEC5qhNFNMA9O_rx-S1kAwrHzvbw",
     authDomain: "voteroast-57ecf.firebaseapp.com",
@@ -15,274 +14,334 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Game Variables
-let playerName = "";
-let roomId = "";
+// Game State
+let myName = "";
+let room = "";
 let isHost = false;
 let roomRef = null;
-let roomData = null;
+let localState = null;
+let currentScreen = 'screen-login';
 
-const roasts = [
-    "Even a sloth looks at them and says 'bhai thoda toh hile le'.",
-    "Their screen time is higher than their bank balance.",
-    "Will cancel plans just to stare at the ceiling.",
-    "Certified couch potato. Do not disturb."
+const questions = [
+    "Who is most likely to survive a zombie apocalypse by hiding?",
+    "Who definitely has the weirdest search history?",
+    "If we were all in a horror movie, who dies first?",
+    "Who is the most chronically online person here?"
 ];
 
-// DOM Elements
-const screens = document.querySelectorAll('.screen');
-const switchScreen = (screenId) => {
-    screens.forEach(s => {
-        if (!s.classList.contains('hidden')) {
-            gsap.to(s, { opacity: 0, y: -20, duration: 0.3, onComplete: () => {
-                s.classList.add('hidden');
-                const next = document.getElementById(screenId);
-                next.classList.remove('hidden');
-                gsap.fromTo(next, {opacity: 0, y: 20}, {opacity: 1, y: 0, duration: 0.4});
-            }});
-        }
-    });
+// --- UTILS ---
+const getAvatar = (name) => `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${name}&backgroundColor=transparent`;
+
+const showToast = (msg) => {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = "bg-red-500/90 text-white px-4 py-2 rounded-lg shadow-lg backdrop-blur-sm text-sm font-bold transform transition-all duration-300 translate-y-[-20px] opacity-0";
+    toast.innerText = msg;
+    container.appendChild(toast);
+    
+    // Animate In
+    setTimeout(() => { toast.classList.remove('translate-y-[-20px]', 'opacity-0'); }, 10);
+    // Animate Out
+    setTimeout(() => {
+        toast.classList.add('translate-y-[-20px]', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 };
 
-const triggerEmojis = (emojiType = '😂') => {
-    const container = document.getElementById('emoji-container');
-    for(let i=0; i<15; i++) {
-        const emoji = document.createElement('div');
-        emoji.className = 'floating-emoji';
-        emoji.innerText = emojiType;
-        emoji.style.left = Math.random() * 100 + 'vw';
-        emoji.style.top = (Math.random() * 20 + 80) + 'vh'; // start near bottom
-        container.appendChild(emoji);
-        setTimeout(() => emoji.remove(), 3000);
+const switchScreen = (newScreenId) => {
+    if (currentScreen === newScreenId) return;
+    const oldScreen = document.getElementById(currentScreen);
+    const newScreen = document.getElementById(newScreenId);
+    
+    gsap.to(oldScreen, { opacity: 0, y: -20, duration: 0.2, onComplete: () => {
+        oldScreen.classList.add('hidden');
+        newScreen.classList.remove('hidden');
+        gsap.fromTo(newScreen, {opacity: 0, y: 20}, {opacity: 1, y: 0, duration: 0.3});
+        currentScreen = newScreenId;
+    }});
+};
+
+const triggerEmojis = (emoji) => {
+    for(let i=0; i<20; i++) {
+        const el = document.createElement('div');
+        el.className = 'floating-emoji';
+        el.innerText = emoji;
+        el.style.left = Math.random() * 100 + 'vw';
+        el.style.top = '100vh';
+        document.body.appendChild(el);
+        
+        gsap.to(el, {
+            y: -(window.innerHeight + 100),
+            x: (Math.random() - 0.5) * 200,
+            rotation: Math.random() * 360,
+            duration: Math.random() * 2 + 2,
+            ease: "power1.out",
+            onComplete: () => el.remove()
+        });
     }
 };
 
-// ================= FLOW LOGIC =================
+// --- CORE LOGIC ---
 
-// JOIN ROOM
 document.getElementById('btn-join').addEventListener('click', async () => {
-    playerName = document.getElementById('playerName').value.trim();
-    roomId = document.getElementById('roomCode').value.trim().toUpperCase();
+    myName = document.getElementById('playerName').value.trim();
+    room = document.getElementById('roomCode').value.trim().toUpperCase();
     
-    if (!playerName || !roomId) return alert("Enter Name and Room Code!");
+    if (!myName || !room) return showToast("Enter Name and Room Code!");
+    if (myName.length > 12) return showToast("Name too long!");
 
-    roomRef = ref(db, `rooms/${roomId}`);
-    const snapshot = await get(roomRef);
+    roomRef = ref(db, `rooms/${room}`);
+    const snap = await get(roomRef);
     
-    if (!snapshot.exists()) {
-        // Create Room - Become Host
+    if (!snap.exists()) {
         isHost = true;
         await set(roomRef, {
             state: 'lobby',
-            players: { [playerName]: { score: 0 } }
+            host: myName,
+            players: { [myName]: { score: 0, avatar: getAvatar(myName) } }
         });
-        document.getElementById('btn-start').classList.remove('hidden');
     } else {
-        // Join existing
-        if(snapshot.val().state !== 'lobby') return alert("Game already in progress!");
-        await update(ref(db, `rooms/${roomId}/players`), {
-            [playerName]: { score: 0 }
+        const data = snap.val();
+        if (data.state !== 'lobby' && !data.players[myName]) {
+            return showToast("Game already started!");
+        }
+        await update(ref(db, `rooms/${room}/players`), {
+            [myName]: { score: data.players[myName]?.score || 0, avatar: getAvatar(myName) }
         });
     }
 
-    document.getElementById('display-room-code').innerText = roomId;
+    // Handle Disconnect (Anti-Ghosting)
+    const myPlayerRef = ref(db, `rooms/${room}/players/${myName}`);
+    onDisconnect(myPlayerRef).remove();
+
+    document.getElementById('display-room-code').innerText = room;
     listenToRoom();
     switchScreen('screen-lobby');
 });
 
-// LISTEN TO REALTIME CHANGES
 function listenToRoom() {
     onValue(roomRef, (snapshot) => {
-        roomData = snapshot.val();
-        if (!roomData) return; // Room deleted
+        localState = snapshot.val();
+        if (!localState) {
+            showToast("Room closed!");
+            setTimeout(() => window.location.reload(), 2000);
+            return;
+        }
 
-        updateLobbyUI();
+        const players = Object.keys(localState.players || {});
+        const pCount = players.length;
 
-        // State Machine
-        if (roomData.state === 'vote' && document.getElementById('screen-vote').classList.contains('hidden')) {
-            setupVoteScreen();
-            switchScreen('screen-vote');
-        } else if (roomData.state === 'roast' && document.getElementById('screen-roast').classList.contains('hidden')) {
-            showRoastScreen();
-            switchScreen('screen-roast');
-        } else if (roomData.state === 'submit_msg' && document.getElementById('screen-submit').classList.contains('hidden')) {
-            switchScreen('screen-submit');
-        } else if (roomData.state === 'guess' && document.getElementById('screen-guess').classList.contains('hidden')) {
-            setupGuessScreen();
-            switchScreen('screen-guess');
-        } else if (roomData.state === 'leaderboard' && document.getElementById('screen-leaderboard').classList.contains('hidden')) {
-            showLeaderboard();
-            switchScreen('screen-leaderboard');
+        // UI Updates based on state
+        switch(localState.state) {
+            case 'lobby':
+                document.getElementById('player-list').innerHTML = Object.entries(localState.players).map(([name, data]) => `
+                    <li class="bg-white/5 rounded-lg p-3 flex items-center gap-3 border border-white/10">
+                        <img src="${data.avatar}" class="w-10 h-10 bg-white/20 rounded-full">
+                        <span class="font-bold truncate">${name}</span>
+                    </li>
+                `).join('');
+                
+                if (isHost) {
+                    document.getElementById('btn-start').classList.remove('hidden');
+                    document.getElementById('wait-msg').classList.add('hidden');
+                } else {
+                    document.getElementById('wait-msg').classList.remove('hidden');
+                }
+                switchScreen('screen-lobby');
+                break;
+
+            case 'vote':
+                document.getElementById('vote-question').innerText = localState.currentQuestion;
+                const vCount = Object.keys(localState.votes || {}).length;
+                document.getElementById('vote-counter').innerText = `${vCount}/${pCount}`;
+                
+                if(currentScreen !== 'screen-vote') {
+                    const btnContainer = document.getElementById('vote-buttons');
+                    btnContainer.innerHTML = '';
+                    btnContainer.style.pointerEvents = 'auto';
+                    
+                    players.forEach(p => {
+                        if (p !== myName) {
+                            const btn = document.createElement('button');
+                            btn.className = "flex flex-col items-center gap-2 bg-white/5 hover:bg-cyan-500/20 border border-white/10 hover:border-cyan-500 p-4 rounded-xl transition";
+                            btn.innerHTML = `<img src="${getAvatar(p)}" class="w-12 h-12"><span class="font-bold">${p}</span>`;
+                            btn.onclick = async () => {
+                                btnContainer.style.pointerEvents = 'none';
+                                btn.classList.add('bg-cyan-500/50', 'border-cyan-500');
+                                await update(ref(db, `rooms/${room}/votes`), { [myName]: p });
+                                checkAdvancement('vote', pCount);
+                            };
+                            btnContainer.appendChild(btn);
+                        }
+                    });
+                    switchScreen('screen-vote');
+                }
+                break;
+
+            case 'roast':
+                if(currentScreen !== 'screen-roast') {
+                    triggerEmojis('🔥');
+                    document.getElementById('roast-victim').innerText = localState.roastVictim;
+                    document.getElementById('roast-text').innerText = `"Highest voted... exposed."`;
+                    switchScreen('screen-roast');
+                    
+                    // Auto advance timer
+                    gsap.fromTo("#roast-timer-bar", {width: "100%"}, {width: "0%", duration: 6, ease: "linear", onComplete: () => {
+                        if(isHost) update(roomRef, { state: 'submit_msg', messages: null });
+                    }});
+                }
+                break;
+
+            case 'submit_msg':
+                const mCount = Object.keys(localState.messages || {}).length;
+                document.getElementById('submit-counter').innerText = `${mCount}/${pCount}`;
+                
+                if(currentScreen !== 'screen-submit') {
+                    document.getElementById('anonymous-msg').value = '';
+                    document.getElementById('anonymous-msg').disabled = false;
+                    document.getElementById('btn-submit-msg').innerText = "Lock It In";
+                    document.getElementById('btn-submit-msg').disabled = false;
+                    document.getElementById('submit-status').classList.add('hidden');
+                    switchScreen('screen-submit');
+                }
+                break;
+
+            case 'guess':
+                const gCount = Object.keys(localState.guesses || {}).length;
+                document.getElementById('guess-counter').innerText = `${gCount}/${pCount}`;
+                document.getElementById('current-guess-msg').innerText = localState.currentMsg;
+
+                if(currentScreen !== 'screen-guess' || localState.currentMsgIndex !== document.getElementById('screen-guess').dataset.index) {
+                    document.getElementById('screen-guess').dataset.index = localState.currentMsgIndex;
+                    const gContainer = document.getElementById('guess-buttons');
+                    gContainer.innerHTML = '';
+                    gContainer.style.pointerEvents = 'auto';
+
+                    players.forEach(p => {
+                        const btn = document.createElement('button');
+                        btn.className = "bg-white/5 hover:bg-purple-500/30 border border-white/10 p-3 rounded-lg font-bold transition";
+                        btn.innerText = p;
+                        btn.onclick = async () => {
+                            gContainer.style.pointerEvents = 'none';
+                            btn.classList.add('bg-purple-500/50');
+                            await update(ref(db, `rooms/${room}/guesses`), { [myName]: p });
+                            checkAdvancement('guess', pCount);
+                        };
+                        gContainer.appendChild(btn);
+                    });
+                    switchScreen('screen-guess');
+                }
+                break;
+
+            case 'leaderboard':
+                if(currentScreen !== 'screen-leaderboard') {
+                    triggerEmojis('🎉');
+                    const sorted = Object.entries(localState.players).sort((a,b) => b[1].score - a[1].score);
+                    document.getElementById('leaderboard-list').innerHTML = sorted.map(([name, data], i) => `
+                        <li class="bg-white/10 p-4 rounded-xl flex items-center justify-between ${i===0?'border-2 border-yellow-400':''}">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">${i===0?'👑':(i+1)}</span>
+                                <img src="${data.avatar}" class="w-10 h-10">
+                                <span class="font-bold text-lg">${name}</span>
+                            </div>
+                            <span class="text-cyan-400 font-black text-xl">${data.score} pts</span>
+                        </li>
+                    `).join('');
+
+                    if(isHost) {
+                        document.getElementById('btn-replay').classList.remove('hidden');
+                        document.getElementById('replay-msg').classList.add('hidden');
+                    } else {
+                        document.getElementById('replay-msg').classList.remove('hidden');
+                    }
+                    switchScreen('screen-leaderboard');
+                }
+                break;
         }
     });
 }
 
-function updateLobbyUI() {
-    if(!roomData.players) return;
-    const players = Object.keys(roomData.players);
-    document.getElementById('player-count').innerText = players.length;
-    document.getElementById('player-list').innerHTML = players.map(p => 
-        `<li class="bg-black/30 p-2 rounded-lg flex justify-between"><span>${p}</span> ${p === playerName ? '(You)' : ''}</li>`
-    ).join('');
-}
+// --- DECENTRALIZED ADVANCEMENT ---
+// Anyone who completes an action checks if they were the last one.
+// If yes, THEY trigger the next state. No host bottleneck.
 
-// HOST: START GAME
-document.getElementById('btn-start').addEventListener('click', () => {
-    if(Object.keys(roomData.players).length < 2) return alert("Need at least 2 players!");
-    update(roomRef, { state: 'vote', votes: null, messages: null, guesses: null, currentMsgIndex: 0 });
-});
-
-// VOTE LOGIC
-function setupVoteScreen() {
-    document.getElementById('vote-status').classList.add('hidden');
-    const container = document.getElementById('vote-buttons');
-    container.innerHTML = '';
+async function checkAdvancement(phase, pCount) {
+    const snap = await get(roomRef);
+    const data = snap.val();
     
-    Object.keys(roomData.players).forEach(p => {
-        if(p !== playerName) {
-            const btn = document.createElement('button');
-            btn.className = "w-full bg-black/40 hover:bg-pink-500/50 border border-pink-500/30 font-semibold py-3 rounded-xl transition";
-            btn.innerText = p;
-            btn.onclick = async () => {
-                btn.classList.add('bg-pink-500', 'text-white');
-                container.style.pointerEvents = 'none';
-                document.getElementById('vote-status').classList.remove('hidden');
-                await update(ref(db, `rooms/${roomId}/votes`), { [playerName]: p });
-                checkAllVotes();
-            };
-            container.appendChild(btn);
+    if (phase === 'vote') {
+        const vCount = Object.keys(data.votes || {}).length;
+        if (vCount === pCount) {
+            // Calculate victim
+            const counts = {};
+            Object.values(data.votes).forEach(v => counts[v] = (counts[v] || 0) + 1);
+            const victim = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+            await update(roomRef, { state: 'roast', roastVictim: victim });
         }
-    });
-}
+    } 
+    else if (phase === 'submit_msg') {
+        const mCount = Object.keys(data.messages || {}).length;
+        if (mCount === pCount) {
+            const authors = Object.keys(data.messages);
+            await update(roomRef, { 
+                state: 'guess', 
+                currentMsgIndex: 0, 
+                msgQueue: authors,
+                currentMsgAuthor: authors[0],
+                currentMsg: data.messages[authors[0]],
+                guesses: null
+            });
+        }
+    }
+    else if (phase === 'guess') {
+        const gCount = Object.keys(data.guesses || {}).length;
+        if (gCount === pCount) {
+            // Score Calc
+            let scoreUpdates = {};
+            Object.entries(data.guesses).forEach(([guesser, guess]) => {
+                if (guess === data.currentMsgAuthor && guesser !== data.currentMsgAuthor) {
+                    scoreUpdates[`players/${guesser}/score`] = data.players[guesser].score + 10;
+                }
+            });
+            await update(roomRef, scoreUpdates);
 
-async function checkAllVotes() {
-    if(!isHost) return; // Only host checks and moves state
-    const snapshot = await get(roomRef);
-    const data = snapshot.val();
-    const playerCount = Object.keys(data.players).length;
-    const voteCount = data.votes ? Object.keys(data.votes).length : 0;
-    
-    if(voteCount === playerCount) {
-        // Calculate victim
-        const counts = {};
-        Object.values(data.votes).forEach(v => counts[v] = (counts[v] || 0) + 1);
-        const victim = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-        
-        await update(roomRef, { 
-            state: 'roast', 
-            roastVictim: victim, 
-            roastText: roasts[Math.floor(Math.random() * roasts.length)]
-        });
-
-        // Move to Round 2 after 7 seconds
-        setTimeout(() => {
-            update(roomRef, { state: 'submit_msg' });
-        }, 7000);
+            // Next Msg or Leaderboard
+            const nextIdx = data.currentMsgIndex + 1;
+            if (nextIdx < data.msgQueue.length) {
+                const nextAuthor = data.msgQueue[nextIdx];
+                await update(roomRef, {
+                    currentMsgIndex: nextIdx,
+                    currentMsgAuthor: nextAuthor,
+                    currentMsg: data.messages[nextAuthor],
+                    guesses: null
+                });
+            } else {
+                await update(roomRef, { state: 'leaderboard' });
+            }
+        }
     }
 }
 
-function showRoastScreen() {
-    triggerEmojis('🔥');
-    document.getElementById('roast-victim').innerText = roomData.roastVictim;
-    document.getElementById('roast-text').innerText = `"${roomData.roastText}"`;
-}
+// --- BUTTON BINDS ---
+document.getElementById('btn-start').addEventListener('click', () => {
+    if(Object.keys(localState.players).length < 2) return showToast("Need at least 2 players!");
+    const q = questions[Math.floor(Math.random() * questions.length)];
+    update(roomRef, { state: 'vote', currentQuestion: q, votes: null, messages: null });
+});
 
-// SUBMIT MESSAGE LOGIC
 document.getElementById('btn-submit-msg').addEventListener('click', async () => {
     const msg = document.getElementById('anonymous-msg').value.trim();
-    if(!msg) return;
+    if(!msg) return showToast("Write something first!");
     
     document.getElementById('anonymous-msg').disabled = true;
     document.getElementById('btn-submit-msg').innerText = "Submitted!";
     document.getElementById('btn-submit-msg').disabled = true;
+    document.getElementById('submit-status').classList.remove('hidden');
 
-    await update(ref(db, `rooms/${roomId}/messages`), { [playerName]: msg });
-    checkAllMessages();
+    await update(ref(db, `rooms/${room}/messages`), { [myName]: msg });
+    checkAdvancement('submit_msg', Object.keys(localState.players).length);
 });
-
-async function checkAllMessages() {
-    if(!isHost) return;
-    const snapshot = await get(roomRef);
-    const data = snapshot.val();
-    const playerCount = Object.keys(data.players).length;
-    const msgCount = data.messages ? Object.keys(data.messages).length : 0;
-    
-    if(msgCount === playerCount) {
-        // Shuffle authors to pick the first message to guess
-        const authors = Object.keys(data.messages);
-        await update(roomRef, { state: 'guess', targetAuthor: authors[0] });
-    }
-}
-
-// GUESS LOGIC
-function setupGuessScreen() {
-    document.getElementById('guess-status').classList.add('hidden');
-    document.getElementById('current-guess-msg').innerText = `"${roomData.messages[roomData.targetAuthor]}"`;
-    
-    const container = document.getElementById('guess-buttons');
-    container.innerHTML = '';
-    container.style.pointerEvents = 'auto';
-
-    Object.keys(roomData.players).forEach(p => {
-        const btn = document.createElement('button');
-        btn.className = "bg-black/40 hover:bg-blue-500/50 border border-blue-500/30 py-2 rounded-lg transition";
-        btn.innerText = p;
-        btn.onclick = async () => {
-            container.style.pointerEvents = 'none';
-            btn.classList.add('bg-blue-500');
-            document.getElementById('guess-status').classList.remove('hidden');
-            await update(ref(db, `rooms/${roomId}/guesses`), { [playerName]: p });
-            checkAllGuesses();
-        };
-        container.appendChild(btn);
-    });
-}
-
-async function checkAllGuesses() {
-    if(!isHost) return;
-    const snapshot = await get(roomRef);
-    const data = snapshot.val();
-    const playerCount = Object.keys(data.players).length;
-    const guessCount = data.guesses ? Object.keys(data.guesses).length : 0;
-
-    if(guessCount === playerCount) {
-        // Calculate scores
-        let updates = {};
-        Object.entries(data.guesses).forEach(([guesser, guess]) => {
-            if(guess === data.targetAuthor && guesser !== data.targetAuthor) {
-                updates[`players/${guesser}/score`] = data.players[guesser].score + 10;
-            }
-        });
-        
-        await update(roomRef, { ...updates, state: 'leaderboard' });
-    }
-}
-
-// LEADERBOARD LOGIC
-function showLeaderboard() {
-    triggerEmojis('🎉');
-    const list = document.getElementById('leaderboard-list');
-    
-    // Sort players by score
-    const sortedPlayers = Object.entries(roomData.players).sort((a, b) => b[1].score - a[1].score);
-    
-    list.innerHTML = sortedPlayers.map(([name, data], i) => `
-        <li class="bg-black/30 p-4 rounded-xl flex justify-between items-center ${i===0 ? 'border-2 border-yellow-400' : ''}">
-            <span class="font-bold text-lg">${i===0?'👑 ':''}${name}</span>
-            <span class="text-pink-400 font-bold">${data.score} pts</span>
-        </li>
-    `).join('');
-
-    if(isHost) {
-        document.getElementById('btn-replay').classList.remove('hidden');
-    }
-}
 
 document.getElementById('btn-replay').addEventListener('click', () => {
     update(roomRef, { state: 'lobby', votes: null, messages: null, guesses: null });
-    // Reset local inputs
-    document.getElementById('anonymous-msg').value = '';
-    document.getElementById('anonymous-msg').disabled = false;
-    document.getElementById('btn-submit-msg').innerText = "Send Anonymously";
-    document.getElementById('btn-submit-msg').disabled = false;
 });
