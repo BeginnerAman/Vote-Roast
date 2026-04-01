@@ -3,72 +3,114 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Vote & Roast + Guess Who</title>
+  <title>Vote & Roast Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-  <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Outfit', sans-serif; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 10px; }
+    
+    .glass-panel {
+      background: rgba(20, 20, 30, 0.6);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .floating-emoji {
+      position: absolute;
+      font-size: 2.5rem;
+      pointer-events: none;
+      z-index: 50;
+    }
+  </style>
 </head>
-<body class="bg-gradient-to-br from-gray-900 via-purple-900 to-black text-white min-h-screen font-[Poppins] flex flex-col items-center justify-center p-4 overflow-hidden">
+<body class="bg-gradient-to-br from-indigo-950 via-purple-900 to-black text-white min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden">
 
-  <div id="emoji-container" class="pointer-events-none fixed inset-0 z-0"></div>
+  <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2"></div>
 
-  <div id="game-container" class="relative z-10 w-full max-w-md bg-white/10 backdrop-blur-lg rounded-3xl p-6 shadow-2xl border border-white/20">
+  <div id="game-container" class="relative z-10 w-full max-w-md glass-panel rounded-3xl p-6 shadow-2xl">
     
     <div id="screen-login" class="screen block">
-      <h1 class="text-4xl font-extrabold text-center mb-2 bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-yellow-500">Vote & Roast</h1>
-      <p class="text-center text-gray-300 mb-8 text-sm">The ultimate group exposure game 👀</p>
+      <div class="text-center mb-8">
+        <h1 class="text-5xl font-extrabold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-500 tracking-tight">ROAST<br>ROYALE</h1>
+        <p class="text-gray-400 text-sm">No secrets. Only victims.</p>
+      </div>
       
       <div class="space-y-4">
-        <input type="text" id="playerName" placeholder="Your Name" class="w-full bg-black/30 border border-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:border-pink-500 transition">
-        <input type="text" id="roomCode" placeholder="Room Code (e.g. 1234)" class="w-full bg-black/30 border border-gray-600 rounded-xl px-4 py-3 uppercase focus:outline-none focus:border-pink-500 transition">
-        <button id="btn-join" class="w-full bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 font-bold py-3 rounded-xl transition transform hover:scale-105 shadow-lg">Join / Create Room</button>
+        <input type="text" id="playerName" placeholder="Enter your name" maxlength="12" class="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-lg focus:outline-none focus:border-cyan-500 transition shadow-inner">
+        <input type="text" id="roomCode" placeholder="Room Code (e.g. 1234)" maxlength="6" class="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-lg uppercase focus:outline-none focus:border-purple-500 transition shadow-inner">
+        <button id="btn-join" class="w-full bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 font-bold text-lg py-4 rounded-xl transition-all transform hover:scale-[1.02] shadow-[0_0_20px_rgba(168,85,247,0.4)]">Enter Lobby</button>
       </div>
     </div>
 
-    <div id="screen-lobby" class="screen hidden text-center">
-      <h2 class="text-2xl font-bold mb-2">Room: <span id="display-room-code" class="text-pink-400"></span></h2>
-      <p class="mb-4 text-sm text-gray-300">Waiting for victims... (<span id="player-count">0</span>/6)</p>
-      <ul id="player-list" class="space-y-2 mb-6 max-h-48 overflow-y-auto"></ul>
-      <button id="btn-start" class="hidden w-full bg-green-500 hover:bg-green-600 font-bold py-3 rounded-xl transition shadow-lg">Start Game (Host)</button>
+    <div id="screen-lobby" class="screen hidden flex flex-col h-[60vh]">
+      <div class="text-center mb-4">
+        <h2 class="text-gray-400">Room Code</h2>
+        <div id="display-room-code" class="text-4xl font-black tracking-widest text-cyan-400"></div>
+      </div>
+      
+      <div class="flex-1 overflow-y-auto bg-black/20 rounded-xl p-2 mb-4">
+        <ul id="player-list" class="grid grid-cols-2 gap-2"></ul>
+      </div>
+      
+      <button id="btn-start" class="w-full bg-green-500 hover:bg-green-400 text-black font-extrabold text-lg py-4 rounded-xl transition-all hidden">START GAME</button>
+      <p id="wait-msg" class="text-center text-sm text-gray-400 hidden">Waiting for creator to start...</p>
     </div>
 
     <div id="screen-vote" class="screen hidden text-center">
-      <span class="text-xs font-bold uppercase tracking-widest text-pink-400">Round 1</span>
-      <h2 id="vote-question" class="text-2xl font-bold mt-2 mb-6">Sabse lazy kaun hai?</h2>
-      <div id="vote-buttons" class="space-y-3"></div>
-      <p id="vote-status" class="mt-4 text-sm text-gray-400 hidden">Waiting for others to vote...</p>
+      <div class="inline-block bg-purple-500/20 text-purple-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-4">Round 1: Exposure</div>
+      <h2 id="vote-question" class="text-2xl font-bold mb-6 text-white leading-tight"></h2>
+      <div id="vote-buttons" class="grid grid-cols-2 gap-3 mb-4"></div>
+      <div class="text-sm text-gray-400 mt-2">Votes: <span id="vote-counter" class="text-cyan-400 font-bold">0/0</span></div>
     </div>
 
     <div id="screen-roast" class="screen hidden text-center">
-      <h2 class="text-3xl font-bold mb-2 text-red-400">Target Acquired 🎯</h2>
-      <p class="text-xl mb-4">You guys voted <span id="roast-victim" class="font-bold text-yellow-400 text-2xl"></span></p>
-      <div class="bg-black/40 p-4 rounded-xl border border-red-500/30">
-        <p id="roast-text" class="italic text-lg text-gray-200">"Their bed must be charging rent at this point."</p>
+      <h2 class="text-3xl font-black mb-2 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">TARGET LOCK 🎯</h2>
+      <p class="text-lg mb-4 text-gray-300">The squad has decided that...</p>
+      
+      <div class="bg-black/50 p-6 rounded-2xl border border-red-500/30 mb-6 relative overflow-hidden">
+        <h3 id="roast-victim" class="font-black text-4xl text-white mb-2 z-10 relative"></h3>
+        <p id="roast-text" class="italic text-lg text-red-300 z-10 relative"></p>
       </div>
+      
+      <div class="w-full bg-gray-800 rounded-full h-2 mb-2 overflow-hidden">
+        <div id="roast-timer-bar" class="bg-gradient-to-r from-red-500 to-orange-500 h-2 w-full"></div>
+      </div>
+      <p class="text-xs text-gray-500 uppercase tracking-wider">Moving to next round...</p>
     </div>
 
-    <div id="screen-submit" class="screen hidden text-center">
-      <span class="text-xs font-bold uppercase tracking-widest text-blue-400">Round 2: Guess Who</span>
-      <h2 class="text-xl font-bold mt-2 mb-4">Spill some tea ☕</h2>
-      <p class="text-sm text-gray-300 mb-4">Write an anonymous funny confession or message about anyone here.</p>
-      <textarea id="anonymous-msg" rows="3" class="w-full bg-black/30 border border-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition mb-4" placeholder="Be savage, but keep it friendly..."></textarea>
-      <button id="btn-submit-msg" class="w-full bg-blue-500 hover:bg-blue-600 font-bold py-3 rounded-xl transition shadow-lg">Send Anonymously</button>
+    <div id="screen-submit" class="screen hidden flex flex-col h-[50vh]">
+      <div class="text-center mb-4">
+        <div class="inline-block bg-cyan-500/20 text-cyan-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-2">Round 2: Guess Who</div>
+        <h2 class="text-xl font-bold">Spill the Tea ☕</h2>
+      </div>
+      
+      <textarea id="anonymous-msg" class="flex-1 w-full bg-black/40 border border-gray-600 rounded-xl p-4 text-lg focus:outline-none focus:border-cyan-500 transition resize-none mb-4 placeholder-gray-600" placeholder="Drop a funny secret, roast, or weird fact about someone in this room..."></textarea>
+      
+      <button id="btn-submit-msg" class="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-lg py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)]">Lock It In</button>
+      <div id="submit-status" class="text-center text-sm text-gray-400 mt-3 hidden">Waiting for others: <span id="submit-counter" class="text-cyan-400 font-bold">0/0</span></div>
     </div>
 
     <div id="screen-guess" class="screen hidden text-center">
-      <h2 class="text-xl font-bold mb-4">Who wrote this? 🤔</h2>
-      <div class="bg-white/10 p-4 rounded-xl mb-6 shadow-inner">
-        <p id="current-guess-msg" class="text-lg font-semibold text-yellow-300">"..."</p>
+      <h2 class="text-xl font-bold mb-4 text-gray-300">Who wrote this? 🤔</h2>
+      <div class="bg-white/5 p-6 rounded-2xl mb-6 shadow-inner border border-white/10 relative">
+        <span class="text-4xl absolute -top-4 -left-2 opacity-50">"</span>
+        <p id="current-guess-msg" class="text-2xl font-semibold text-cyan-300"></p>
+        <span class="text-4xl absolute -bottom-8 -right-2 opacity-50">"</span>
       </div>
-      <div id="guess-buttons" class="grid grid-cols-2 gap-3"></div>
-      <p id="guess-status" class="mt-4 text-sm text-gray-400 hidden">Waiting for others...</p>
+      <div id="guess-buttons" class="grid grid-cols-2 gap-3 mb-4"></div>
+      <div class="text-sm text-gray-400 mt-2">Guesses: <span id="guess-counter" class="text-purple-400 font-bold">0/0</span></div>
     </div>
 
     <div id="screen-leaderboard" class="screen hidden text-center">
-      <h2 class="text-3xl font-bold mb-6 text-yellow-400">Final Scores 🏆</h2>
-      <ul id="leaderboard-list" class="space-y-3 mb-6"></ul>
-      <button id="btn-replay" class="hidden w-full bg-gradient-to-r from-pink-500 to-yellow-500 font-bold py-3 rounded-xl transition shadow-lg text-black">Play Again (Host)</button>
+      <h2 class="text-4xl font-black mb-8 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">FINAL SCORES</h2>
+      <ul id="leaderboard-list" class="space-y-3 mb-8"></ul>
+      <button id="btn-replay" class="w-full bg-white/10 hover:bg-white/20 border border-white/20 font-bold py-4 rounded-xl transition hidden">Play Again</button>
+      <p id="replay-msg" class="text-sm text-gray-400 hidden">Waiting for host to restart...</p>
     </div>
 
   </div>
