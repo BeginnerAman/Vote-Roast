@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vote & Roast + Guess Who</title>
+  <meta name="description" content="Lightweight real-time multiplayer party game for friends." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 selection:bg-fuchsia-500/30">
+  <div id="app" class="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+    <header class="mb-6 text-center sm:mb-8">
+      <h1 class="text-3xl font-extrabold tracking-tight sm:text-4xl">
+        Vote & Roast <span class="text-fuchsia-400">+</span> Guess Who
+      </h1>
+      <p class="mt-2 text-sm text-slate-300 sm:text-base">2-6 players | savage but friendly | real-time chaos</p>
+    </header>
+
+    <main id="screen-container" class="card p-4 sm:p-6">
+      <section id="home-screen" class="space-y-4">
+        <h2 class="text-xl font-bold">Create or Join Room</h2>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="space-y-2">
+            <label for="name-input" class="text-sm text-slate-300">Your Name</label>
+            <input id="name-input" maxlength="18" class="input" placeholder="e.g. Meme Lord" />
+          </div>
+          <div class="space-y-2">
+            <label for="room-input" class="text-sm text-slate-300">Room Code</label>
+            <input id="room-input" maxlength="6" class="input uppercase" placeholder="AB12CD" />
+          </div>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <button id="create-room-btn" class="btn btn-primary">Create Room</button>
+          <button id="join-room-btn" class="btn btn-secondary">Join Room</button>
+        </div>
+        <p class="text-xs text-slate-400">Tip: Share room code in your group chat. No login needed.</p>
+      </section>
+
+      <section id="lobby-screen" class="hidden space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-bold">Lobby</h2>
+            <p class="text-sm text-slate-300">Room: <span id="room-code-display" class="font-mono text-fuchsia-300"></span></p>
+          </div>
+          <button id="copy-room-btn" class="btn btn-secondary btn-sm">Copy Code</button>
+        </div>
+
+        <div>
+          <p class="mb-2 text-sm text-slate-300">Players (<span id="player-count">0</span>/6)</p>
+          <div id="players-list" class="grid gap-2 sm:grid-cols-2"></div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button id="start-game-btn" class="btn btn-primary">Start Game</button>
+          <button id="leave-room-btn" class="btn btn-danger">Leave Room</button>
+        </div>
+        <p class="text-xs text-slate-400">Need at least 2 players to start. Host controls game flow.</p>
+      </section>
+
+      <section id="question-screen" class="hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-bold">Round 1: Vote & Roast</h2>
+          <p class="text-sm text-fuchsia-300">Question <span id="question-index">1</span>/3</p>
+        </div>
+        <div class="rounded-xl bg-slate-900/60 p-4">
+          <p id="current-question" class="text-lg font-semibold"></p>
+        </div>
+        <div>
+          <p class="mb-2 text-sm text-slate-300">Pick your suspect:</p>
+          <div id="vote-options" class="grid gap-2 sm:grid-cols-2"></div>
+        </div>
+        <div class="h-2 overflow-hidden rounded-full bg-slate-800">
+          <div id="vote-progress" class="h-full w-0 bg-fuchsia-500 transition-all duration-300"></div>
+        </div>
+        <p id="vote-status" class="text-sm text-slate-300"></p>
+      </section>
+
+      <section id="roast-screen" class="hidden space-y-4 text-center">
+        <h2 class="text-xl font-bold">Roast Result</h2>
+        <div class="rounded-xl bg-slate-900/70 p-5">
+          <p class="text-sm text-slate-300">Crowned by democracy:</p>
+          <p id="roast-target" class="mt-1 text-3xl font-black text-fuchsia-300"></p>
+          <p id="roast-message" class="mt-3 text-base text-slate-100"></p>
+        </div>
+        <p id="roast-subtext" class="text-sm text-slate-400"></p>
+      </section>
+
+      <section id="anon-write-screen" class="hidden space-y-4">
+        <h2 class="text-xl font-bold">Round 2: Anonymous Messages</h2>
+        <p class="text-sm text-slate-300">Write one spicy line. Keep it funny, not hateful.</p>
+        <textarea id="anon-message-input" maxlength="140" class="input min-h-[120px]" placeholder="e.g. Whoever keeps saying 'bro listen...' never listens."></textarea>
+        <button id="submit-anon-btn" class="btn btn-primary">Submit Anonymous Message</button>
+        <p id="anon-submit-status" class="text-sm text-slate-300"></p>
+      </section>
+
+      <section id="guess-screen" class="hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-bold">Guess Who Wrote It</h2>
+          <p class="text-sm text-fuchsia-300">Message <span id="guess-index">1</span>/<span id="guess-total">1</span></p>
+        </div>
+        <div class="rounded-xl bg-slate-900/70 p-4">
+          <p id="guess-message" class="text-lg"></p>
+        </div>
+        <div id="guess-options" class="grid gap-2 sm:grid-cols-2"></div>
+        <p id="guess-status" class="text-sm text-slate-300"></p>
+      </section>
+
+      <section id="results-screen" class="hidden space-y-4">
+        <h2 class="text-xl font-bold">Final Scoreboard</h2>
+        <div id="scoreboard-list" class="grid gap-2"></div>
+        <div class="flex flex-wrap gap-2">
+          <button id="replay-btn" class="btn btn-primary">Replay</button>
+          <button id="results-leave-btn" class="btn btn-danger">Leave Room</button>
+        </div>
+      </section>
+    </main>
+
+    <p id="toast" class="pointer-events-none fixed bottom-4 left-1/2 z-50 hidden -translate-x-1/2 rounded-lg bg-slate-800/95 px-4 py-2 text-sm text-slate-100 shadow-xl"></p>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
